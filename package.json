@@ -44,7 +44,7 @@
     "release": "npm run build && np",
     "docs": "./scripts/docs.sh"
   },
-  "repository": "https://github.com/ionic-team/cordova-plugin-ionic.git",
+  "repository": "https://github.com/jsherwani/cordova-plugin-ionic.git",
   "issue": "https://github.com/ionic-team/cordova-plugin-ionic/issues",
   "bugs": {
     "url": "https://github.com/ionic-team/cordova-plugin-ionic/issues"
