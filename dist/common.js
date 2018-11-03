@@ -38,6 +38,9 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
+var channel = cordova.require('cordova/channel');
+channel.createSticky('onIonicProReady');
+channel.waitForInitialization('onIonicProReady');
 var UpdateMethod;
 (function (UpdateMethod) {
     UpdateMethod["BACKGROUND"] = "background";
@@ -81,7 +84,7 @@ var IonicDeployImpl = /** @class */ (function () {
         this._fileManager = new FileManager();
         this.SNAPSHOT_CACHE = 'ionic_built_snapshots';
         this.MANIFEST_FILE = 'pro-manifest.json';
-        this.PLUGIN_VERSION = '5.2.5';
+        this.PLUGIN_VERSION = '5.2.7-0';
         this.appInfo = appInfo;
         this._savedPreferences = preferences;
     }
@@ -159,7 +162,11 @@ var IonicDeployImpl = /** @class */ (function () {
         return Path.join(cordova.file.dataDirectory, this.SNAPSHOT_CACHE, versionId);
     };
     IonicDeployImpl.prototype.getBundledAppDir = function () {
-        return Path.join(cordova.file.applicationDirectory, 'www');
+        var folder = 'www';
+        if (typeof (Capacitor) !== 'undefined') {
+            folder = 'public';
+        }
+        return Path.join(cordova.file.applicationDirectory, folder);
     };
     IonicDeployImpl.prototype._savePrefs = function (prefs) {
         return __awaiter(this, void 0, void 0, function () {
@@ -473,15 +480,6 @@ var IonicDeployImpl = /** @class */ (function () {
             });
         });
     };
-    IonicDeployImpl.prototype.hideSplash = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, new Promise(function (resolve, reject) {
-                        cordova.exec(resolve, reject, 'IonicCordovaCommon', 'clearSplashFlag');
-                    })];
-            });
-        });
-    };
     IonicDeployImpl.prototype.reloadApp = function () {
         return __awaiter(this, void 0, void 0, function () {
             var prefs, newLocation;
@@ -505,7 +503,7 @@ var IonicDeployImpl = /** @class */ (function () {
                         return [4 /*yield*/, this._savePrefs(prefs)];
                     case 4:
                         _a.sent();
-                        this.hideSplash();
+                        channel.onIonicProReady.fire();
                         Ionic.WebView.persistServerBasePath();
                         return [4 /*yield*/, this.cleanupVersions()];
                     case 5:
@@ -515,14 +513,14 @@ var IonicDeployImpl = /** @class */ (function () {
                         // Is the current version on the device?
                         if (!(prefs.currentVersionId in prefs.updates)) {
                             console.error("Missing version " + prefs.currentVersionId);
-                            this.hideSplash();
+                            channel.onIonicProReady.fire();
                             return [2 /*return*/, false];
                         }
                         newLocation = new URL(this.getSnapshotCacheDir(prefs.currentVersionId));
                         Ionic.WebView.setServerBasePath(newLocation.pathname);
                         return [2 /*return*/, true];
                     case 7:
-                        this.hideSplash();
+                        channel.onIonicProReady.fire();
                         return [2 /*return*/, false];
                 }
             });
@@ -538,13 +536,20 @@ var IonicDeployImpl = /** @class */ (function () {
     };
     IonicDeployImpl.prototype.cleanCurrentVersionIfStale = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var prefs, versionId;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
+            var prefs, _a, versionId;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
                     case 0:
                         prefs = this._savedPreferences;
-                        if (!prefs.currentVersionId) return [3 /*break*/, 2];
-                        if (!(!this.isCurrentVersion(prefs.updates[prefs.currentVersionId]) && !this._isRunningVersion(prefs.currentVersionId))) return [3 /*break*/, 2];
+                        if (!prefs.currentVersionId) return [3 /*break*/, 4];
+                        _a = !this.isCurrentVersion(prefs.updates[prefs.currentVersionId]);
+                        if (!_a) return [3 /*break*/, 2];
+                        return [4 /*yield*/, this._isRunningVersion(prefs.currentVersionId)];
+                    case 1:
+                        _a = !(_b.sent());
+                        _b.label = 2;
+                    case 2:
+                        if (!_a) return [3 /*break*/, 4];
                         console.log("Update " + prefs.currentVersionId + " was built for different binary version removing update from device" +
                             ("Update binaryVersionName: " + prefs.updates[prefs.currentVersionId].binaryVersionName + ", Device binaryVersionName " + prefs.binaryVersionName) +
                             ("Update binaryVersionCode: " + prefs.updates[prefs.currentVersionId].binaryVersionCode + ", Device binaryVersionCode " + prefs.binaryVersionCode));
@@ -552,10 +557,10 @@ var IonicDeployImpl = /** @class */ (function () {
                         // NOTE: deleting pref.currentVersionId here to fool deleteVersionById into deleting it
                         delete prefs.currentVersionId;
                         return [4 /*yield*/, this.deleteVersionById(versionId)];
-                    case 1:
-                        _a.sent();
-                        _a.label = 2;
-                    case 2: return [2 /*return*/];
+                    case 3:
+                        _b.sent();
+                        _b.label = 4;
+                    case 4: return [2 /*return*/];
                 }
             });
         });
@@ -1000,91 +1005,29 @@ var IonicDeploy = /** @class */ (function () {
             var preferences, appInfo, delegate, disabledMessage;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.platformReady()];
+                    case 0: return [4 /*yield*/, this._initPreferences()];
                     case 1:
-                        _a.sent();
-                        return [4 /*yield*/, this._initPreferences()];
-                    case 2:
                         preferences = _a.sent();
                         this.minBackgroundDuration = preferences.minBackgroundDuration;
                         this.disabled = preferences.disabled || !this.fetchIsAvailable;
                         return [4 /*yield*/, this.parent.getAppDetails()];
-                    case 3:
+                    case 2:
                         appInfo = _a.sent();
                         delegate = new IonicDeployImpl(appInfo, preferences);
-                        if (!this.disabled) return [3 /*break*/, 5];
+                        if (!this.disabled) return [3 /*break*/, 3];
                         disabledMessage = 'cordova-plugin-ionic has been disabled.';
                         if (!this.fetchIsAvailable) {
                             disabledMessage = 'Fetch is unavailable so ' + disabledMessage;
                         }
                         console.warn(disabledMessage);
-                        return [4 /*yield*/, new Promise(function (resolve, reject) {
-                                cordova.exec(resolve, reject, 'IonicCordovaCommon', 'clearSplashFlag');
-                            })];
+                        channel.onIonicProReady.fire();
+                        return [3 /*break*/, 5];
+                    case 3: return [4 /*yield*/, delegate._handleInitialPreferenceState()];
                     case 4:
                         _a.sent();
-                        return [3 /*break*/, 7];
-                    case 5: return [4 /*yield*/, delegate._handleInitialPreferenceState()];
-                    case 6:
-                        _a.sent();
-                        _a.label = 7;
-                    case 7: return [2 /*return*/, delegate];
+                        _a.label = 5;
+                    case 5: return [2 /*return*/, delegate];
                 }
-            });
-        });
-    };
-    IonicDeploy.prototype.platformReady = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            var ready, readyPromise, timeout, e_7;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        ready = false;
-                        _a.label = 1;
-                    case 1:
-                        if (!!ready) return [3 /*break*/, 6];
-                        readyPromise = this.deviceReadyPromise();
-                        timeout = this.timeoutPromise(200);
-                        _a.label = 2;
-                    case 2:
-                        _a.trys.push([2, 4, , 5]);
-                        return [4 /*yield*/, Promise.race([timeout, readyPromise])];
-                    case 3:
-                        _a.sent();
-                        ready = true;
-                        return [3 /*break*/, 5];
-                    case 4:
-                        e_7 = _a.sent();
-                        console.log('platform ready timed out waiting for device ready creating new listener');
-                        return [3 /*break*/, 5];
-                    case 5: return [3 /*break*/, 1];
-                    case 6: return [2 /*return*/];
-                }
-            });
-        });
-    };
-    IonicDeploy.prototype.timeoutPromise = function (delay) {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, new Promise(function (resolve, reject) {
-                        setTimeout(reject, delay);
-                    })];
-            });
-        });
-    };
-    IonicDeploy.prototype.deviceReadyPromise = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, new Promise(function (resolve, reject) {
-                        if (window.cordova) {
-                            document.addEventListener('deviceready', function () {
-                                resolve();
-                            });
-                        }
-                        else {
-                            reject();
-                        }
-                    })];
             });
         });
     };
@@ -1135,8 +1078,71 @@ var IonicDeploy = /** @class */ (function () {
                         var _this = this;
                         return __generator(this, function (_a) {
                             try {
+                                channel.onNativeReady.subscribe(function () { return __awaiter(_this, void 0, void 0, function () {
+                                    var _this = this;
+                                    return __generator(this, function (_a) {
+                                        cordova.exec(function (prefs) { return __awaiter(_this, void 0, void 0, function () {
+                                            return __generator(this, function (_a) {
+                                                resolve(prefs);
+                                                return [2 /*return*/];
+                                            });
+                                        }); }, reject, 'IonicCordovaCommon', 'getPreferences');
+                                        return [2 /*return*/];
+                                    });
+                                }); });
+                            }
+                            catch (e) {
+                                channel.onIonicProReady.fire();
+                                reject(e.message);
+                            }
+                            return [2 /*return*/];
+                        });
+                    }); })];
+            });
+        });
+    };
+    IonicDeploy.prototype.checkForUpdate = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!!this.disabled) return [3 /*break*/, 2];
+                        return [4 /*yield*/, this.delegate];
+                    case 1: return [2 /*return*/, (_a.sent()).checkForUpdate()];
+                    case 2: return [2 /*return*/, { available: false, compatible: false, partial: false }];
+                }
+            });
+        });
+    };
+    IonicDeploy.prototype.configure = function (config) {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!!this.disabled) return [3 /*break*/, 2];
+                        return [4 /*yield*/, this.delegate];
+                    case 1: return [2 /*return*/, (_a.sent()).configure(config)];
+                    case 2: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    IonicDeploy.prototype.getConfiguration = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            var _this = this;
+            return __generator(this, function (_a) {
+                return [2 /*return*/, new Promise(function (resolve, reject) { return __awaiter(_this, void 0, void 0, function () {
+                        var _this = this;
+                        return __generator(this, function (_a) {
+                            try {
                                 cordova.exec(function (prefs) { return __awaiter(_this, void 0, void 0, function () {
                                     return __generator(this, function (_a) {
+                                        if (prefs.availableUpdate) {
+                                            delete prefs.availableUpdate;
+                                        }
+                                        if (prefs.updates) {
+                                            delete prefs.updates;
+                                        }
                                         resolve(prefs);
                                         return [2 /*return*/];
                                     });
@@ -1151,82 +1157,15 @@ var IonicDeploy = /** @class */ (function () {
             });
         });
     };
-    IonicDeploy.prototype.checkForUpdate = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.platformReady()];
-                    case 1:
-                        _a.sent();
-                        if (!!this.disabled) return [3 /*break*/, 3];
-                        return [4 /*yield*/, this.delegate];
-                    case 2: return [2 /*return*/, (_a.sent()).checkForUpdate()];
-                    case 3: return [2 /*return*/, { available: false, compatible: false, partial: false }];
-                }
-            });
-        });
-    };
-    IonicDeploy.prototype.configure = function (config) {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.platformReady()];
-                    case 1:
-                        _a.sent();
-                        if (!!this.disabled) return [3 /*break*/, 3];
-                        return [4 /*yield*/, this.delegate];
-                    case 2: return [2 /*return*/, (_a.sent()).configure(config)];
-                    case 3: return [2 /*return*/];
-                }
-            });
-        });
-    };
-    IonicDeploy.prototype.getConfiguration = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            var _this = this;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.platformReady()];
-                    case 1:
-                        _a.sent();
-                        return [2 /*return*/, new Promise(function (resolve, reject) { return __awaiter(_this, void 0, void 0, function () {
-                                var _this = this;
-                                return __generator(this, function (_a) {
-                                    try {
-                                        cordova.exec(function (prefs) { return __awaiter(_this, void 0, void 0, function () {
-                                            return __generator(this, function (_a) {
-                                                if (prefs.availableUpdate) {
-                                                    delete prefs.availableUpdate;
-                                                }
-                                                if (prefs.updates) {
-                                                    delete prefs.updates;
-                                                }
-                                                resolve(prefs);
-                                                return [2 /*return*/];
-                                            });
-                                        }); }, reject, 'IonicCordovaCommon', 'getPreferences');
-                                    }
-                                    catch (e) {
-                                        reject(e.message);
-                                    }
-                                    return [2 /*return*/];
-                                });
-                            }); })];
-                }
-            });
-        });
-    };
     IonicDeploy.prototype.deleteVersionById = function (version) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.platformReady()];
-                    case 1:
-                        _a.sent();
-                        if (!!this.disabled) return [3 /*break*/, 3];
+                    case 0:
+                        if (!!this.disabled) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.delegate];
-                    case 2: return [2 /*return*/, (_a.sent()).deleteVersionById(version)];
-                    case 3: return [2 /*return*/, true];
+                    case 1: return [2 /*return*/, (_a.sent()).deleteVersionById(version)];
+                    case 2: return [2 /*return*/, true];
                 }
             });
         });
@@ -1235,13 +1174,11 @@ var IonicDeploy = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.platformReady()];
-                    case 1:
-                        _a.sent();
-                        if (!!this.disabled) return [3 /*break*/, 3];
+                    case 0:
+                        if (!!this.disabled) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.delegate];
-                    case 2: return [2 /*return*/, (_a.sent()).downloadUpdate(progress)];
-                    case 3: return [2 /*return*/, false];
+                    case 1: return [2 /*return*/, (_a.sent()).downloadUpdate(progress)];
+                    case 2: return [2 /*return*/, false];
                 }
             });
         });
@@ -1250,13 +1187,11 @@ var IonicDeploy = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.platformReady()];
-                    case 1:
-                        _a.sent();
-                        if (!!this.disabled) return [3 /*break*/, 3];
+                    case 0:
+                        if (!!this.disabled) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.delegate];
-                    case 2: return [2 /*return*/, (_a.sent()).extractUpdate(progress)];
-                    case 3: return [2 /*return*/, false];
+                    case 1: return [2 /*return*/, (_a.sent()).extractUpdate(progress)];
+                    case 2: return [2 /*return*/, false];
                 }
             });
         });
@@ -1265,13 +1200,11 @@ var IonicDeploy = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.platformReady()];
-                    case 1:
-                        _a.sent();
-                        if (!!this.disabled) return [3 /*break*/, 3];
+                    case 0:
+                        if (!!this.disabled) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.delegate];
-                    case 2: return [2 /*return*/, (_a.sent()).getAvailableVersions()];
-                    case 3: return [2 /*return*/, []];
+                    case 1: return [2 /*return*/, (_a.sent()).getAvailableVersions()];
+                    case 2: return [2 /*return*/, []];
                 }
             });
         });
@@ -1280,13 +1213,11 @@ var IonicDeploy = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.platformReady()];
-                    case 1:
-                        _a.sent();
-                        if (!!this.disabled) return [3 /*break*/, 3];
+                    case 0:
+                        if (!!this.disabled) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.delegate];
-                    case 2: return [2 /*return*/, (_a.sent()).getCurrentVersion()];
-                    case 3: return [2 /*return*/];
+                    case 1: return [2 /*return*/, (_a.sent()).getCurrentVersion()];
+                    case 2: return [2 /*return*/];
                 }
             });
         });
@@ -1295,13 +1226,11 @@ var IonicDeploy = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.platformReady()];
-                    case 1:
-                        _a.sent();
-                        if (!!this.disabled) return [3 /*break*/, 3];
+                    case 0:
+                        if (!!this.disabled) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.delegate];
-                    case 2: return [2 /*return*/, (_a.sent()).getVersionById(versionId)];
-                    case 3: throw Error("No update available with versionId " + versionId);
+                    case 1: return [2 /*return*/, (_a.sent()).getVersionById(versionId)];
+                    case 2: throw Error("No update available with versionId " + versionId);
                 }
             });
         });
@@ -1310,13 +1239,11 @@ var IonicDeploy = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.platformReady()];
-                    case 1:
-                        _a.sent();
-                        if (!!this.disabled) return [3 /*break*/, 3];
+                    case 0:
+                        if (!!this.disabled) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.delegate];
-                    case 2: return [2 /*return*/, (_a.sent()).reloadApp()];
-                    case 3: return [2 /*return*/, false];
+                    case 1: return [2 /*return*/, (_a.sent()).reloadApp()];
+                    case 2: return [2 /*return*/, false];
                 }
             });
         });
@@ -1326,13 +1253,11 @@ var IonicDeploy = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.platformReady()];
-                    case 1:
-                        _a.sent();
-                        if (!!this.disabled) return [3 /*break*/, 3];
+                    case 0:
+                        if (!!this.disabled) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.delegate];
-                    case 2: return [2 /*return*/, (_a.sent()).sync(syncOptions)];
-                    case 3: return [2 /*return*/];
+                    case 1: return [2 /*return*/, (_a.sent()).sync(syncOptions)];
+                    case 2: return [2 /*return*/];
                 }
             });
         });
