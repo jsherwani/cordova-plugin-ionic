@@ -4,9 +4,15 @@
 /// <reference types="cordova" />
 
 declare const cordova: Cordova;
+
+const channel = cordova.require('cordova/channel');
+channel.createSticky('onIonicProReady');
+channel.waitForInitialization('onIonicProReady');
+
 declare const resolveLocalFileSystemURL: Window['resolveLocalFileSystemURL'] ;
 declare const Ionic: any;
 declare const WEBVIEW_SERVER_URL: string;
+declare const Capacitor: any;
 
 enum UpdateMethod {
   BACKGROUND = 'background',
@@ -42,7 +48,6 @@ class Path {
         }
         return fullPath;
     }
-
 }
 
 /**
@@ -58,7 +63,7 @@ class IonicDeployImpl {
   private _fileManager: FileManager = new FileManager();
   private SNAPSHOT_CACHE = 'ionic_built_snapshots';
   private MANIFEST_FILE = 'pro-manifest.json';
-  public PLUGIN_VERSION = '5.2.5';
+  public PLUGIN_VERSION = '5.2.7-0';
 
   constructor(appInfo: IAppInfo, preferences: ISavedPreferences) {
     this.appInfo = appInfo;
@@ -113,7 +118,11 @@ class IonicDeployImpl {
   }
 
   getBundledAppDir(): string {
-    return Path.join(cordova.file.applicationDirectory, 'www');
+    let folder = 'www';
+    if (typeof (Capacitor) !== 'undefined') {
+      folder = 'public';
+    }
+    return Path.join(cordova.file.applicationDirectory, folder);
   }
 
   private async _savePrefs(prefs: ISavedPreferences): Promise<ISavedPreferences> {
@@ -307,12 +316,6 @@ class IonicDeployImpl {
     return true;
   }
 
-  private async hideSplash(): Promise<string> {
-    return new Promise<string>( (resolve, reject) => {
-      cordova.exec(resolve, reject, 'IonicCordovaCommon', 'clearSplashFlag');
-    });
-  }
-
   async reloadApp(): Promise<boolean> {
     const prefs = this._savedPreferences;
 
@@ -329,7 +332,7 @@ class IonicDeployImpl {
       if (await this._isRunningVersion(prefs.currentVersionId)) {
         console.log(`Already running version ${prefs.currentVersionId}`);
         await this._savePrefs(prefs);
-        this.hideSplash();
+        channel.onIonicProReady.fire();
         Ionic.WebView.persistServerBasePath();
         await this.cleanupVersions();
         return false;
@@ -338,7 +341,7 @@ class IonicDeployImpl {
       // Is the current version on the device?
       if (!(prefs.currentVersionId in prefs.updates)) {
         console.error(`Missing version ${prefs.currentVersionId}`);
-        this.hideSplash();
+        channel.onIonicProReady.fire();
         return false;
       }
 
@@ -348,7 +351,7 @@ class IonicDeployImpl {
       return true;
     }
 
-    this.hideSplash();
+    channel.onIonicProReady.fire();
     return false;
   }
 
@@ -365,7 +368,7 @@ class IonicDeployImpl {
     const prefs = this._savedPreferences;
     // Is the current version built from a previous binary?
     if (prefs.currentVersionId) {
-      if (!this.isCurrentVersion(prefs.updates[prefs.currentVersionId]) && !this._isRunningVersion(prefs.currentVersionId)) {
+      if (!this.isCurrentVersion(prefs.updates[prefs.currentVersionId]) && !(await this._isRunningVersion(prefs.currentVersionId))) {
         console.log(
           `Update ${prefs.currentVersionId} was built for different binary version removing update from device` +
           `Update binaryVersionName: ${prefs.updates[prefs.currentVersionId].binaryVersionName}, Device binaryVersionName ${prefs.binaryVersionName}` +
@@ -639,7 +642,6 @@ class IonicDeploy implements IDeployPluginAPI {
   }
 
   async initialize() {
-    await this.platformReady();
     const preferences = await this._initPreferences();
     this.minBackgroundDuration = preferences.minBackgroundDuration;
     this.disabled = preferences.disabled || !this.fetchIsAvailable;
@@ -652,48 +654,12 @@ class IonicDeploy implements IDeployPluginAPI {
         disabledMessage = 'Fetch is unavailable so ' + disabledMessage;
       }
       console.warn(disabledMessage);
-      await new Promise<string>( (resolve, reject) => {
-        cordova.exec(resolve, reject, 'IonicCordovaCommon', 'clearSplashFlag');
-      });
+      channel.onIonicProReady.fire();
     } else {
       await delegate._handleInitialPreferenceState();
     }
+
     return delegate;
-  }
-
-  private async platformReady(): Promise<void> {
-    let ready = false;
-    while (!ready) {
-      const readyPromise = this.deviceReadyPromise();
-      // I don't know why but keep recreating the promise every 200 milliseconds for Ionic1
-      // apparently errors in the app.js and perhaps elsewhere in Ionic1 can cause deviceReady
-      // to be swallowed some how causing splash screen to hang
-      // and recreating the listener seems to get the event
-      const timeout = this.timeoutPromise(200);
-      try {
-        await Promise.race([timeout, readyPromise]);
-        ready = true;
-      } catch (e) {
-        console.log('platform ready timed out waiting for device ready creating new listener');
-      }
-    }
-  }
-
-  private async timeoutPromise(delay: number): Promise<undefined> {
-    return new Promise<undefined>( (resolve, reject) => {
-      setTimeout(reject, delay);
-    });
-  }
-  private async deviceReadyPromise(): Promise<undefined> {
-    return new Promise<undefined>((resolve, reject) => {
-      if (window.cordova) {
-        document.addEventListener('deviceready', () => {
-          resolve();
-        });
-      } else {
-        reject();
-      }
-    });
   }
 
   async onLoad() {
@@ -715,17 +681,19 @@ class IonicDeploy implements IDeployPluginAPI {
   async _initPreferences(): Promise<ISavedPreferences> {
     return new Promise<ISavedPreferences>(async (resolve, reject) => {
       try {
-        cordova.exec(async (prefs: ISavedPreferences) => {
-          resolve(prefs);
-        }, reject, 'IonicCordovaCommon', 'getPreferences');
+        channel.onNativeReady.subscribe(async () => {
+          cordova.exec(async (prefs: ISavedPreferences) => {
+            resolve(prefs);
+          }, reject, 'IonicCordovaCommon', 'getPreferences');
+        });
       } catch (e) {
+        channel.onIonicProReady.fire();
         reject(e.message);
       }
     });
   }
 
   async checkForUpdate(): Promise<CheckDeviceResponse> {
-    await this.platformReady();
     if (!this.disabled) {
       return (await this.delegate).checkForUpdate();
     }
@@ -733,12 +701,10 @@ class IonicDeploy implements IDeployPluginAPI {
   }
 
   async configure(config: IDeployConfig): Promise<void> {
-    await this.platformReady();
     if (!this.disabled) return (await this.delegate).configure(config);
   }
 
   async getConfiguration(): Promise<ICurrentConfig> {
-    await this.platformReady();
     return new Promise<ICurrentConfig>(async (resolve, reject) => {
       try {
         cordova.exec(async (prefs: ISavedPreferences) => {
@@ -757,49 +723,41 @@ class IonicDeploy implements IDeployPluginAPI {
   }
 
   async deleteVersionById(version: string): Promise<boolean> {
-    await this.platformReady();
     if (!this.disabled) return (await this.delegate).deleteVersionById(version);
     return true;
   }
 
   async downloadUpdate(progress?: CallbackFunction<number>): Promise<boolean> {
-    await this.platformReady();
     if (!this.disabled) return (await this.delegate).downloadUpdate(progress);
     return false;
   }
 
   async extractUpdate(progress?: CallbackFunction<number>): Promise<boolean> {
-    await this.platformReady();
     if (!this.disabled) return (await this.delegate).extractUpdate(progress);
     return false;
   }
 
   async getAvailableVersions(): Promise<ISnapshotInfo[]> {
-    await this.platformReady();
     if (!this.disabled) return (await this.delegate).getAvailableVersions();
     return [];
   }
 
   async getCurrentVersion(): Promise<ISnapshotInfo | undefined> {
-    await this.platformReady();
     if (!this.disabled) return (await this.delegate).getCurrentVersion();
     return;
   }
 
   async getVersionById(versionId: string): Promise<ISnapshotInfo> {
-    await this.platformReady();
     if (!this.disabled) return (await this.delegate).getVersionById(versionId);
     throw Error(`No update available with versionId ${versionId}`);
   }
 
   async reloadApp(): Promise<boolean> {
-    await this.platformReady();
     if (!this.disabled) return (await this.delegate).reloadApp();
     return false;
   }
 
   async sync(syncOptions: ISyncOptions = {}): Promise<ISnapshotInfo | undefined> {
-    await this.platformReady();
     if (!this.disabled) return (await this.delegate).sync(syncOptions);
     return;
   }
