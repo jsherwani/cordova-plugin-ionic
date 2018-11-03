@@ -533,13 +533,20 @@ var IonicDeployImpl = /** @class */ (function () {
     };
     IonicDeployImpl.prototype.cleanCurrentVersionIfStale = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var prefs, versionId;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
+            var prefs, _a, versionId;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
                     case 0:
                         prefs = this._savedPreferences;
-                        if (!prefs.currentVersionId) return [3 /*break*/, 2];
-                        if (!(!this.isCurrentVersion(prefs.updates[prefs.currentVersionId]) && !this._isRunningVersion(prefs.currentVersionId))) return [3 /*break*/, 2];
+                        if (!prefs.currentVersionId) return [3 /*break*/, 4];
+                        _a = !this.isCurrentVersion(prefs.updates[prefs.currentVersionId]);
+                        if (!_a) return [3 /*break*/, 2];
+                        return [4 /*yield*/, this._isRunningVersion(prefs.currentVersionId)];
+                    case 1:
+                        _a = !(_b.sent());
+                        _b.label = 2;
+                    case 2:
+                        if (!_a) return [3 /*break*/, 4];
                         console.log("Update " + prefs.currentVersionId + " was built for different binary version removing update from device" +
                             ("Update binaryVersionName: " + prefs.updates[prefs.currentVersionId].binaryVersionName + ", Device binaryVersionName " + prefs.binaryVersionName) +
                             ("Update binaryVersionCode: " + prefs.updates[prefs.currentVersionId].binaryVersionCode + ", Device binaryVersionCode " + prefs.binaryVersionCode));
@@ -547,10 +554,10 @@ var IonicDeployImpl = /** @class */ (function () {
                         // NOTE: deleting pref.currentVersionId here to fool deleteVersionById into deleting it
                         delete prefs.currentVersionId;
                         return [4 /*yield*/, this.deleteVersionById(versionId)];
-                    case 1:
-                        _a.sent();
-                        _a.label = 2;
-                    case 2: return [2 /*return*/];
+                    case 3:
+                        _b.sent();
+                        _b.label = 4;
+                    case 4: return [2 /*return*/];
                 }
             });
         });
