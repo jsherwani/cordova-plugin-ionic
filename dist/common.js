@@ -315,7 +315,7 @@ var IonicDeployImpl = /** @class */ (function () {
     };
     IonicDeployImpl.prototype._downloadFilesFromManifest = function (baseUrl, manifest, versionId, progress) {
         return __awaiter(this, void 0, void 0, function () {
-            var size, downloaded, beforeDownloadTimer, downloadFile, downloads, count, maxBatch, _i, manifest_1, entry;
+            var size, downloaded, beforeDownloadTimer, downloadFile, downloads, count, maxBatch, numberBatches, _i, manifest_1, entry;
             var _this = this;
             return __generator(this, function (_a) {
                 switch (_a.label) {
@@ -351,6 +351,10 @@ var IonicDeployImpl = /** @class */ (function () {
                         count = 0;
                         console.log("About to download " + manifest.length + " new files for update.");
                         maxBatch = 20;
+                        numberBatches = Math.round(manifest.length / maxBatch);
+                        if (manifest.length % maxBatch !== 0) {
+                            numberBatches = numberBatches + 1;
+                        }
                         _i = 0, manifest_1 = manifest;
                         _a.label = 1;
                     case 1:
@@ -361,7 +365,7 @@ var IonicDeployImpl = /** @class */ (function () {
                         return [4 /*yield*/, Promise.all(downloads)];
                     case 2:
                         _a.sent();
-                        beforeDownloadTimer.diff("downloaded batch " + count + " of " + maxBatch + " downloads. Done downloading " + count * 10 + " of " + manifest.length + " files");
+                        beforeDownloadTimer.diff("downloaded batch " + count + " of " + numberBatches + " downloads. Done downloading " + count * maxBatch + " of " + manifest.length + " files");
                         downloads = [];
                         _a.label = 3;
                     case 3:
@@ -372,10 +376,11 @@ var IonicDeployImpl = /** @class */ (function () {
                         return [3 /*break*/, 1];
                     case 5:
                         if (!downloads.length) return [3 /*break*/, 7];
+                        count++;
                         return [4 /*yield*/, Promise.all(downloads)];
                     case 6:
                         _a.sent();
-                        beforeDownloadTimer.diff("downloaded batch " + count + " of " + downloads.length + " downloads Done downloading all " + manifest.length + " files");
+                        beforeDownloadTimer.diff("downloaded batch " + count + " of " + numberBatches + " downloads. Done downloading all " + manifest.length + " files");
                         _a.label = 7;
                     case 7:
                         beforeDownloadTimer.end("Downloaded " + manifest.length + " files");
